@@ -10,7 +10,7 @@ const execAsync = promisify(exec);
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(cors());
 const port = 2000;
 
@@ -25,6 +25,43 @@ app.post('/audioToText', async (req, res) => {
     } catch (error) {
         console.error(error);
         return res.status(500).json({ error: `Could not convert audio to text: ${error}` });
+    }
+});
+
+app.post('/textToResponse', async (req, res) => {
+    const { text, recipe, conversation } = req.body;
+    try {
+        const messages = [
+            {
+                role: 'system',
+                content: `You are a helpful assistant who is assisting a user with a recipe. 
+                The user is asking for help with a recipe, and your role is to give them whatever 
+                help they need and be concise and friendly as you do it. 
+                The recipe is as follows: ${recipe} .`
+            }
+        ];
+        if (conversation) {
+            for (const message of conversation) {
+                messages.push(message);
+            }
+        }
+        messages.push(
+            {
+                role: 'user',
+                content: text
+            }
+        );
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4-turbo-preview",
+            messages: messages,
+        });
+        if (completion.choices && completion.choices.length > 0) {
+            const content = completion.choices[0].message.content;
+            return res.status(200).json({ text: content });
+        }
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: `Could not respond to message: ${error}` });
     }
 });
 
